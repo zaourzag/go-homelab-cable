@@ -1,6 +1,7 @@
 package player
 
 import (
+	"os"
 	vlc "github.com/adrg/libvlc-go/v3"
 )
 
@@ -26,7 +27,12 @@ func (p *VLCPlayer) Init() error {
 		return err
 	}
 
-	p.player.SetFullScreen(true)
+	// Disable the player window when running in Docker
+	if os.Getenv("DOCKER_ENV") == "true" {
+		p.player.SetFullScreen(false)
+	} else {
+		p.player.SetFullScreen(true)
+	}
 
 	manager, err := p.player.EventManager()
 	if err != nil {
