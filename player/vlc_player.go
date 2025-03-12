@@ -75,11 +75,22 @@ func (p *VLCPlayer) Play(list *MediaList) error {
 
 	p.list = list
 
+	// Define VLC output stream options for HLS
+	hlsOutput := "--sout=#transcode{vcodec=h264,acodec=mp3}:std{access=livehttp{seglen=10,delsegs=true,numsegs=5,index=/stream.m3u8,index-url=http://localhost:3004/segment-########.ts},mux=ts,dst=/segment-########.ts}"
+
 	var err error
 	p.currMedia, err = p.player.LoadMediaFromPath(p.list.Current())
 	if err != nil {
 		return err
 	}
+
+	// Apply streaming options
+	err = p.currMedia.AddOption(hlsOutput)
+	if err != nil {
+		return err
+	}
+
+	// Start streaming
 	return p.player.Play()
 }
 
