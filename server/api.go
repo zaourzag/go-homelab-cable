@@ -71,3 +71,14 @@ func (s *Server) liveChannel(e echo.Context) error {
 	}
 	return e.JSON(http.StatusOK, domain.ToChannelModel(s.Network, c))
 }
+
+// Add a new handler function to serve the HLS stream
+func (s *Server) serveHLSStream(e echo.Context) error {
+	return e.File("static/stream.m3u8")
+}
+
+// Add a new handler function to serve the HLS segment
+func (s *Server) serveHLSSegment(e echo.Context) error {
+	segment := e.Param("segment")
+	return e.File("static/segment-" + segment + ".ts")
+}
