@@ -10,8 +10,7 @@ import (
 	"github.com/clabland/go-homelab-cable/network"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"net/http"
-	"path/filepath"
+	// "net/http"
 )
 
 // embedded files
@@ -74,12 +73,12 @@ func (s *Server) Serve() {
 }
 
 // Implement a handler function to serve the HLS stream
-func (s *Server) serveHLSStream(c echo.Context) error {
-	return c.File(filepath.Join("static", "stream.m3u8"))
-}
+// func (s *Server) serveHLSStream(c echo.Context) error {
+// 	return c.File(filepath.Join("static", "stream.m3u8"))
+// }
 
-// Implement a handler function to serve the HLS segment
-func (s *Server) serveHLSSegment(c echo.Context) error {
-	segment := c.Param("segment")
-	return c.File(filepath.Join("static", fmt.Sprintf("segment-%s.ts", segment)))
-}
+// // Implement a handler function to serve the HLS segment
+// func (s *Server) serveHLSSegment(c echo.Context) error {
+// 	segment := c.Param("segment")
+// 	return c.File(filepath.Join("static", fmt.Sprintf("segment-%s.ts", segment)))
+// }

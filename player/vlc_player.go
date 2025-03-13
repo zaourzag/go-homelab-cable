@@ -1,7 +1,9 @@
 package player
 
 import (
+	"fmt"
 	"os"
+
 	vlc "github.com/adrg/libvlc-go/v3"
 )
 
@@ -15,7 +17,8 @@ type VLCPlayer struct {
 }
 
 func (p *VLCPlayer) Init() error {
-	err := vlc.Init("--quiet")
+	// Initialize VLC with verbose logging
+	err := vlc.Init("--no-video", "--verbose", "2")
 	if err != nil {
 		return err
 	}
@@ -27,7 +30,7 @@ func (p *VLCPlayer) Init() error {
 		return err
 	}
 
-	// Disable the player window when running in Docker
+	// Disable fullscreen in Docker
 	if os.Getenv("DOCKER_ENV") == "true" {
 		p.player.SetFullScreen(false)
 	} else {
@@ -40,8 +43,7 @@ func (p *VLCPlayer) Init() error {
 	}
 
 	eventCallback := func(event vlc.Event, userData interface{}) {
-		switch event {
-		case vlc.MediaPlayerEndReached:
+		if event == vlc.MediaPlayerEndReached {
 			p.next <- struct{}{}
 		}
 	}
@@ -51,14 +53,14 @@ func (p *VLCPlayer) Init() error {
 		return err
 	}
 
-	go func(p *VLCPlayer) {
+	go func() {
 		for range p.next {
 			err := p.PlayNext()
 			if err != nil {
-				panic(err)
+				fmt.Println("Error playing next:", err)
 			}
 		}
-	}(p)
+	}()
 
 	return nil
 }
@@ -80,23 +82,47 @@ func (p *VLCPlayer) Play(list *MediaList) error {
 	}
 
 	p.list = list
-
-	// Define VLC output stream options for HLS
-	hlsOutput := "--sout=#transcode{vcodec=h264,acodec=mp3}:std{access=livehttp{seglen=10,delsegs=true,numsegs=5,index=/stream.m3u8,index-url=http://localhost:3004/segment-########.ts},mux=ts,dst=/segment-########.ts}"
+	isDocker := os.Getenv("DOCKER_ENV") == "true"
 
 	var err error
-	p.currMedia, err = p.player.LoadMediaFromPath(p.list.Current())
+	p.currMedia, err = vlc.NewMediaFromPath(p.list.Current())
 	if err != nil {
 		return err
 	}
 
-	// Apply streaming options
-	err = p.currMedia.AddOption(hlsOutput)
+	// If running in Docker, ensure HLS options are correctly applied
+	if isDocker {
+		// Ensure HLS output directory exists
+		outputDir := "./static" // Change this if needed
+		err := os.MkdirAll(outputDir, 0755)
+		if err != nil {
+			return err
+		}
+
+		// Corrected HLS stream options
+		hlsOptions := []string{
+			"sout=#http{mux=ts,dst=:8080/stream}", // Stream via HTTP
+			"sout-keep",                           // Keep the stream alive
+		}
+
+		// Apply options to the new media
+		for _, opt := range hlsOptions {
+			err = p.currMedia.AddOptions(opt)
+			if err != nil {
+				return err
+			}
+		}
+
+		fmt.Println("Streaming HLS at: http://localhost:8080/static/stream.m3u8")
+	}
+
+	// Set the media for the player
+	err = p.player.SetMedia(p.currMedia)
 	if err != nil {
 		return err
 	}
 
-	// Start streaming
+	// Start the player
 	return p.player.Play()
 }
 
@@ -105,18 +131,51 @@ func (p *VLCPlayer) PlayNext() error {
 		return ErrPlayerNotInitialized
 	}
 
-	var err error
-	err = p.player.Stop()
+	// Stop the player to reset streaming
+	err := p.player.Stop()
 	if err != nil {
 		return err
 	}
+
+	// Release current media
 	if p.currMedia != nil {
 		p.currMedia.Release()
 	}
-	p.currMedia, err = p.player.LoadMediaFromPath(p.list.Advance())
+
+	// Get the next file from the list
+	nextFile := p.list.Advance()
+
+	// Create new media instance for the next file
+	p.currMedia, err = vlc.NewMediaFromPath(nextFile)
 	if err != nil {
 		return err
 	}
+
+	// If running in Docker, ensure HLS options are correctly applied
+	isDocker := os.Getenv("DOCKER_ENV") == "true"
+	if isDocker {
+		// Corrected HLS stream options
+		hlsOptions := []string{
+			"sout=#http{mux=ts,dst=:8080/stream}", // Stream via HTTP
+			"sout-keep",                           // Keep the stream alive
+		}
+
+		// Apply options to the new media
+		for _, opt := range hlsOptions {
+			err = p.currMedia.AddOptions(opt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Set the media for the player
+	err = p.player.SetMedia(p.currMedia)
+	if err != nil {
+		return err
+	}
+
+	// Start the player again
 	return p.player.Play()
 }
 
